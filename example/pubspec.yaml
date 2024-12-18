@@ -8,6 +8,6 @@ dependencies: { flutter: { sdk: flutter } }
 dev_dependencies:
   flutter_test: { sdk: flutter }
   flutter_lints: ^4.0.0
-  # add custom_lint and unmaterialistic_lint
+  # add custom_lint and unmaterialistic
   custom_lint: any
-  unmaterialistic_lint: { path: ../ }
+  unmaterialistic: { path: ../ }

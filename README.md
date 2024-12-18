@@ -1,4 +1,4 @@
-# `unmaterialistic_lint`
+# `unmaterialistic`
 
 A custom_lint for warning you against importing Flutter's Material library: `import 'package:flutter/material.dart'`.
 
@@ -10,7 +10,7 @@ A custom_lint for warning you against importing Flutter's Material library: `imp
 Add package:
 
 ```sh
-flutter pub add dev:custom_lint dev:unmaterialistic_lint
+flutter pub add dev:custom_lint dev:unmaterialistic
 ```
 
 Update your `analysis_options.yaml`
