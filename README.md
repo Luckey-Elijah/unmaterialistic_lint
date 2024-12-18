@@ -1,16 +1,20 @@
 # `unmaterialistic_lint`
 
+A custom_lint for warning you against importing Flutter's Material library: `import 'package:flutter/material.dart'`.
+
 > [!WARNING]
 > This is experimental and quick-fixes are kind of a hack right now.
 
 ## Install
 
 Add package:
+
 ```sh
 flutter pub add dev:custom_lint dev:unmaterialistic_lint
 ```
 
 Update your `analysis_options.yaml`
+
 ```yaml
 analyzer:
   plugins:
