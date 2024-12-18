@@ -1,0 +1,6 @@
+include: package:flutter_lints/flutter.yaml
+
+# include the plugin in analysis.yaml
+analyzer:
+  plugins:
+    - custom_lint

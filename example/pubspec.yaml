@@ -1,0 +1,13 @@
+name: example
+description: "A new Flutter project."
+publish_to: "none"
+version: 0.1.0
+environment: { sdk: ^3.5.4 }
+flutter: { uses-material-design: true }
+dependencies: { flutter: { sdk: flutter } }
+dev_dependencies:
+  flutter_test: { sdk: flutter }
+  flutter_lints: ^4.0.0
+  # add custom_lint and unmaterialistic_lint
+  custom_lint: any
+  unmaterialistic_lint: { path: ../ }
