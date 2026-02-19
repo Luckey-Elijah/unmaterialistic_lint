@@ -1,78 +1,152 @@
-import 'package:analyzer/error/error.dart' as err;
-import 'package:analyzer/error/listener.dart';
-import 'package:analyzer/source/source_range.dart';
-import 'package:custom_lint_builder/custom_lint_builder.dart';
+import 'package:analyzer/dart/analysis/analysis_context.dart';
+import 'package:analyzer/dart/analysis/analysis_context_collection.dart';
+import 'package:analyzer/dart/analysis/results.dart';
+import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/visitor.dart';
+import 'package:analyzer/file_system/file_system.dart';
+import 'package:analyzer_plugin/plugin/plugin.dart';
+import 'package:analyzer_plugin/protocol/protocol_common.dart' as plugin;
+import 'package:analyzer_plugin/protocol/protocol_generated.dart' as plugin;
 
-/// Entrypoint of `unmaterialistic`
-PluginBase createPlugin() => _UnmaterialisticLinter();
+/// An analyzer plugin that warns against importing
+/// 'package:flutter/material.dart'.
+class UnmaterialisticPlugin extends ServerPlugin {
+  /// Creates an [UnmaterialisticPlugin].
+  UnmaterialisticPlugin(
+    ResourceProvider resourceProvider,
+  ) : super(resourceProvider: resourceProvider);
 
-class _UnmaterialisticLinter extends PluginBase {
+  late AnalysisContextCollection _contextCollection;
+
   @override
-  List<LintRule> getLintRules(CustomLintConfigs configs) {
-    return const [_UnmaterialisticLintCode()];
+  String get contactInfo => 'https://github.com/Luckey-Elijah/unmaterialistic_lint';
+
+  @override
+  List<String> get fileGlobsToAnalyze => const ['**/*.dart'];
+
+  @override
+  String get name => 'unmaterialistic';
+
+  @override
+  String get version => '0.0.1-dev.1';
+
+  @override
+  Future<void> afterNewContextCollection({
+    required AnalysisContextCollection contextCollection,
+  }) async {
+    _contextCollection = contextCollection;
+    await super.afterNewContextCollection(contextCollection: contextCollection);
   }
-}
-
-class _UnmaterialisticLintCode extends DartLintRule {
-  const _UnmaterialisticLintCode() : super(code: _code);
-
-  static const _code = LintCode(
-    name: 'no_import_flutter_material',
-    problemMessage: "Do not import 'package:flutter/material.dart';",
-    errorSeverity: err.ErrorSeverity.WARNING,
-  );
 
   @override
-  List<Fix> getFixes() => [_ConvertMaterialImportToWidgetsImport()];
+  Future<void> analyzeFile({
+    required AnalysisContext analysisContext,
+    required String path,
+  }) async {
+    final result = await analysisContext.currentSession.getResolvedUnit(path);
+    if (result is! ResolvedUnitResult) return;
+
+    final errors = <plugin.AnalysisError>[];
+
+    result.unit.visitChildren(
+      _MaterialImportVisitor(
+        onMaterialImport: (node) {
+          errors.add(_createError(path, result, node));
+        },
+      ),
+    );
+
+    channel.sendNotification(
+      plugin.AnalysisErrorsParams(path, errors).toNotification(),
+    );
+  }
 
   @override
-  void run(
-    CustomLintResolver resolver,
-    ErrorReporter reporter,
-    CustomLintContext context,
-  ) {
-    context.registry.addImportDirective((node) {
-      final importedLibrary = node.element?.importedLibrary;
-      if (importedLibrary?.identifier == 'package:flutter/material.dart') {
-        reporter.atNode(node, code);
+  Future<plugin.EditGetFixesResult> handleEditGetFixes(
+    plugin.EditGetFixesParams parameters,
+  ) async {
+    final path = parameters.file;
+    final offset = parameters.offset;
+
+    final analysisContext = _contextCollection.contextFor(path);
+    final result = await analysisContext.currentSession.getResolvedUnit(path);
+    if (result is! ResolvedUnitResult) {
+      return plugin.EditGetFixesResult([]);
+    }
+
+    final fixes = <plugin.AnalysisErrorFixes>[];
+
+    for (final directive in result.unit.directives) {
+      if (directive is! ImportDirective ||
+          directive.uri.stringValue != 'package:flutter/material.dart' ||
+          offset < directive.offset ||
+          offset > directive.end) {
+        continue;
       }
-    });
+
+      final error = _createError(path, result, directive);
+      final uriNode = directive.uri;
+
+      final change = plugin.SourceChange(
+        'Convert import to '
+        "'package:flutter/widgets.dart'",
+        edits: [
+          plugin.SourceFileEdit(
+            path,
+            -1,
+            edits: [plugin.SourceEdit(uriNode.offset + 1, uriNode.length - 2, 'package:flutter/widgets.dart')],
+          ),
+        ],
+      );
+
+      fixes.add(
+        plugin.AnalysisErrorFixes(
+          error,
+          fixes: [plugin.PrioritizedSourceChange(10, change)],
+        ),
+      );
+    }
+
+    return plugin.EditGetFixesResult(fixes);
+  }
+
+  plugin.AnalysisError _createError(
+    String path,
+    ResolvedUnitResult result,
+    ImportDirective node,
+  ) {
+    final startLoc = result.lineInfo.getLocation(node.offset);
+    final endLoc = result.lineInfo.getLocation(node.end);
+
+    return plugin.AnalysisError(
+      plugin.AnalysisErrorSeverity.WARNING,
+      plugin.AnalysisErrorType.LINT,
+      plugin.Location(
+        path,
+        node.offset,
+        node.length,
+        startLoc.lineNumber,
+        startLoc.columnNumber,
+        endLine: endLoc.lineNumber,
+        endColumn: endLoc.columnNumber,
+      ),
+      "Do not import 'package:flutter/material.dart';",
+      'no_import_flutter_material',
+      hasFix: true,
+    );
   }
 }
 
-class _ConvertMaterialImportToWidgetsImport extends DartFix {
+class _MaterialImportVisitor extends RecursiveAstVisitor<void> {
+  _MaterialImportVisitor({required this.onMaterialImport});
+
+  final void Function(ImportDirective) onMaterialImport;
+
   @override
-  void run(
-    CustomLintResolver resolver,
-    ChangeReporter reporter,
-    CustomLintContext context,
-    err.AnalysisError analysisError,
-    List<err.AnalysisError> others,
-  ) {
-    context.registry.addImportDirective((node) {
-      if (!analysisError.sourceRange.intersects(node.sourceRange)) return;
-      reporter
-          .createChangeBuilder(
-        message: "Convert import to 'package:flutter/widgets.dart';",
-        priority: 10,
-      )
-          .addDartFileEdit((builder) {
-        final identifier = node.element?.importedLibrary?.identifier;
-        if (identifier == null) return;
-
-        final keywordOffset = node.element?.importKeywordOffset;
-        if (keywordOffset == null) return;
-
-        final sourceRange = SourceRange(
-          keywordOffset + "import '".length,
-          identifier.length,
-        );
-
-        builder.addSimpleReplacement(
-          sourceRange,
-          'package:flutter/widgets.dart',
-        );
-      });
-    });
+  void visitImportDirective(ImportDirective node) {
+    if (node.uri.stringValue == 'package:flutter/material.dart') {
+      onMaterialImport(node);
+    }
+    super.visitImportDirective(node);
   }
 }
