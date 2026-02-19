@@ -1,5 +1,5 @@
 name: unmaterialistic
-description: A custom_lint for warning you against using 'package:flutter/material.dart'.
+description: A lint for warning you against using 'package:flutter/material.dart'.
 version: 0.0.3
 repository: https://github.com/Luckey-Elijah/unmaterialistic_lint
 
