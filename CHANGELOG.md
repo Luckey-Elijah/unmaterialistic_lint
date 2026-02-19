@@ -1,3 +1,7 @@
+## 0.0.3
+
+- Updated README to reflect migration to `analyzer_plugin`.
+
 ## 0.0.2
 
 - Removed custom_lint_builder dependency.
